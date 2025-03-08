@@ -46,8 +46,10 @@ impl Completable for Accept {
         let fd = SharedFd::new(fd as i32);
         let socket = Socket { fd };
         let addr = socket2::SockAddr::try_init(move |addr_storage, len| {
-            self.socketaddr.0.clone_into(&mut *addr_storage);
-            *len = self.socketaddr.1;
+            unsafe {
+                self.socketaddr.0.clone_into(&mut *addr_storage); // Dereference addr_storage
+                *len = self.socketaddr.1; // Dereference len
+            }
             Ok(())
         })?;
         Ok((socket, addr.1.as_socket()))
