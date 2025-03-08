@@ -50,6 +50,6 @@ impl Completable for Accept {
             *len = self.socketaddr.1;
             Ok(())
         })?;
-        Ok((socket, addr.1.as_socket()))
+        Ok((socket, addr.as_socket())) // Remove .1, call as_socket() directly
     }
 }
