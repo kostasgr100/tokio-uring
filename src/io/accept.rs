@@ -45,12 +45,10 @@ impl Completable for Accept {
         let fd = cqe.result?;
         let fd = SharedFd::new(fd as i32);
         let socket = Socket { fd };
-        let addr = unsafe {
+        let (_, addr) = unsafe {
             socket2::SockAddr::try_init(move |addr_storage, len| {
-                unsafe {
-                    self.socketaddr.0.clone_into(&mut *addr_storage);
-                    *len = self.socketaddr.1;
-                }
+                self.socketaddr.0.clone_into(&mut *addr_storage);
+                *len = self.socketaddr.1;
                 Ok(())
             })?
         };
