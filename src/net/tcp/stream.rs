@@ -1,6 +1,6 @@
 use std::{
     io,
-    net::{SocketAddr, ToSocketAddrs},
+    net::SocketAddr,
     os::unix::prelude::{AsRawFd, FromRawFd, RawFd},
 };
 
@@ -52,19 +52,16 @@ impl TcpStream {
         Ok(tcp_stream)
     }
 
-    /// Opens a TCP connection to a remote host using a string address (e.g., "host:port").
-    ///
-    /// This method resolves the provided address to a `SocketAddr` and establishes a connection.
-    /// If multiple addresses are resolved, it uses the first one.
-    pub async fn connect_str(addr: &str) -> io::Result<TcpStream> {
-        let mut addrs = addr.to_socket_addrs()?;
-        let addr = addrs.next().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "no addresses resolved")
-        })?;
-        Self::connect(addr).await
-    }
-
     /// Creates new `TcpStream` from a previously bound `std::net::TcpStream`.
+    ///
+    /// This function is intended to be used to wrap a TCP stream from the
+    /// standard library in the tokio-uring equivalent. The conversion assumes nothing
+    /// about the underlying socket; it is left up to the user to decide what socket
+    /// options are appropriate for their use case.
+    ///
+    /// This can be used in conjunction with socket2's `Socket` interface to
+    /// configure a socket before it's handed off, such as setting options like
+    /// `reuse_address` or binding to multiple addresses.
     pub fn from_std(socket: std::net::TcpStream) -> Self {
         let inner = Socket::from_std(socket);
         Self { inner }
