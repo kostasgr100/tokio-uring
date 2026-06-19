@@ -71,6 +71,19 @@ impl TcpStream {
         Self { inner }
     }
 
+    /// Waits for the socket to become readable without passing a buffer to the kernel.
+    ///
+    /// This method uses `io_uring`'s `POLL_ADD` operation. It is cancellation-safe
+    /// because it does not require taking ownership of a buffer, making it safe 
+    /// to use inside `tokio::select!` blocks without risking memory corruption.
+    pub async fn readable(&self) -> io::Result<()> {
+        let raw_fd = self.as_raw_fd();
+        let shared_fd = SharedFd::new(raw_fd);
+        let op = crate::driver::op::PollAdd::new(shared_fd, libc::POLLIN as _);
+        let (res, _) = op.await;
+        res.map(|_| ())
+    }
+
     /// Read some data from the stream into the buffer.
     ///
     /// Returns the original buffer and quantity of data read.
