@@ -76,11 +76,22 @@ impl TcpStream {
     /// This method uses `io_uring`'s `POLL_ADD` operation. It is cancellation-safe
     /// because it does not require taking ownership of a buffer, making it safe 
     /// to use inside `tokio::select!` blocks without risking memory corruption.
+    // Inside impl TcpStream in src/net/tcp/stream.rs
+
     pub async fn readable(&self) -> io::Result<()> {
-        let raw_fd = self.as_raw_fd();
-        let shared_fd = SharedFd::new(raw_fd);
-        let op = crate::runtime::driver::op::PollAdd::new(shared_fd, libc::POLLIN as _);
-        let (res, _) = op.await;
+        use io_uring::opcode;
+        
+        // 1. Get the raw file descriptor
+        let fd = self.inner.as_raw_fd();
+        
+        // 2. Submit the poll operation manually through the runtime context
+        let (res, _) = crate::runtime::CONTEXT.with(|x| {
+            x.handle().expect("Not in a runtime context").submit_op(
+                fd, // We pass the FD directly as the state
+                |fd| opcode::PollAdd::new(fd, libc::POLLIN as _).build()
+            )
+        })?.await;
+    
         res.map(|_| ())
     }
 
