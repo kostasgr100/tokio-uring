@@ -78,21 +78,37 @@ impl TcpStream {
     /// to use inside `tokio::select!` blocks without risking memory corruption.
     // Inside impl TcpStream in src/net/tcp/stream.rs
 
+    struct Poll {
+        fd: i32,
+    }
+    
+    impl crate::runtime::driver::op::Completable for Poll {
+        type Output = io::Result<()>;
+        fn complete(self, cqe: crate::runtime::driver::op::CqeResult) -> Self::Output {
+            cqe.result.map(|_| ())
+        }
+    }
+    
+    // And use it in your readable() method:
     pub async fn readable(&self) -> io::Result<()> {
         use io_uring::opcode;
-        
-        // 1. Get the raw file descriptor
+        use io_uring::types::Fd;
+    
         let fd = self.inner.as_raw_fd();
         
-        // 2. Submit the poll operation manually through the runtime context
+        // submit_op requires:
+        // 1. Data: A type that implements Completable (our Poll struct)
+        // 2. Op generator: A closure that builds the opcode
         let (res, _) = crate::runtime::CONTEXT.with(|x| {
-            x.handle().expect("Not in a runtime context").submit_op(
-                fd, // We pass the FD directly as the state
-                |fd| opcode::PollAdd::new(fd, libc::POLLIN as _).build()
-            )
+            x.handle()
+                .expect("Not in a runtime context")
+                .submit_op(
+                    Poll { fd }, 
+                    |poll| opcode::PollAdd::new(Fd(poll.fd), libc::POLLIN as _).build()
+                )
         })?.await;
     
-        res.map(|_| ())
+        res
     }
 
     /// Read some data from the stream into the buffer.
