@@ -79,7 +79,7 @@ impl TcpStream {
     pub async fn readable(&self) -> io::Result<()> {
         let raw_fd = self.as_raw_fd();
         let shared_fd = SharedFd::new(raw_fd);
-        let op = crate::driver::op::PollAdd::new(shared_fd, libc::POLLIN as _);
+        let op = crate::runtime::driver::op::PollAdd::new(shared_fd, libc::POLLIN as _);
         let (res, _) = op.await;
         res.map(|_| ())
     }
