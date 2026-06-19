@@ -96,20 +96,17 @@ impl TcpStream {
     
         let fd = self.inner.as_raw_fd();
         
-        // 1. Get the Future from submit_op
-        let op_future = crate::runtime::CONTEXT.with(|x| {
+        // Simply await the result directly
+        let res = crate::runtime::CONTEXT.with(|x| {
             x.handle()
                 .expect("Not in a runtime context")
                 .submit_op(
                     Poll { fd }, 
                     |poll| opcode::PollAdd::new(Fd(poll.fd), libc::POLLIN as _).build()
                 )
-        })?;
+        })?.await;
     
-        // 2. Await the future and unpack the tuple (Result, State)
-        let (res, _poll_state) = op_future.await;
-    
-        // 3. Return the Result
+        // res is already the Result<(), io::Error>
         res
     }
 
