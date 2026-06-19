@@ -43,6 +43,17 @@ pub struct TcpStream {
     pub(super) inner: Socket,
 }
 
+struct Poll {
+    fd: i32,
+}
+
+impl crate::runtime::driver::op::Completable for Poll {
+    type Output = io::Result<()>;
+    fn complete(self, cqe: crate::runtime::driver::op::CqeResult) -> Self::Output {
+        cqe.result.map(|_| ())
+    }
+}
+
 impl TcpStream {
     /// Opens a TCP connection to a remote host at the given `SocketAddr`
     pub async fn connect(addr: SocketAddr) -> io::Result<TcpStream> {
@@ -78,17 +89,6 @@ impl TcpStream {
     /// to use inside `tokio::select!` blocks without risking memory corruption.
     // Inside impl TcpStream in src/net/tcp/stream.rs
 
-    struct Poll {
-        fd: i32,
-    }
-    
-    impl crate::runtime::driver::op::Completable for Poll {
-        type Output = io::Result<()>;
-        fn complete(self, cqe: crate::runtime::driver::op::CqeResult) -> Self::Output {
-            cqe.result.map(|_| ())
-        }
-    }
-    
     // And use it in your readable() method:
     pub async fn readable(&self) -> io::Result<()> {
         use io_uring::opcode;
