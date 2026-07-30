@@ -286,3 +286,48 @@ pub async fn no_op() -> std::io::Result<()> {
     let op = Op::<io::NoOp>::no_op().unwrap();
     op.await
 }
+
+use std::sync::atomic::AtomicU32;
+
+/// Park the calling task until `*word != expected`.
+///
+/// Returns `Ok(())` when woken, or `Err(EAGAIN)` if the word already differed
+/// at submit time — callers should treat both identically and re-read the word,
+/// because the kernel's under-lock re-check is what makes a lost wakeup
+/// impossible.
+///
+/// The `&'static AtomicU32` bound is load-bearing: the address must stay mapped
+/// for as long as the SQE is in flight, and `'static` is the cheapest way to
+/// guarantee that at the type level.
+pub async fn futex_wait(word: &'static AtomicU32, expected: u32) -> std::io::Result<()> {
+    // SAFETY: `word` is 'static, so the pointer outlives the operation.
+    let op = unsafe {
+        Op::<io::FutexWait>::futex_wait(
+            word as *const AtomicU32 as *const u32,
+            expected as u64,
+            io::futex::FUTEX_BITSET_MATCH_ANY,
+            io::futex::FUTEX2_SIZE_U32 | io::futex::FUTEX2_PRIVATE,
+        )?
+    };
+    op.await
+}
+
+/// Wake EVERY waiter on `word` with one syscall. This is the whole point: it
+/// replaces N sequential wakes (N IPIs, N VM exits on a guest) with one.
+///
+/// Uses the futex2 `futex_wake` syscall (nr 454, kernel 6.7+) rather than
+/// classic `futex(2)`, so the flags match the FUTEX2_* set the wait side
+/// submitted with — mixing the two ABIs on the same word is asking for a
+/// silent miss.
+pub fn futex_wake_all(word: &AtomicU32) -> i64 {
+    const SYS_FUTEX_WAKE: libc::c_long = 454;
+    unsafe {
+        libc::syscall(
+            SYS_FUTEX_WAKE,
+            word as *const AtomicU32 as *const u32,
+            io::futex::FUTEX_BITSET_MATCH_ANY,
+            i32::MAX,
+            io::futex::FUTEX2_SIZE_U32 | io::futex::FUTEX2_PRIVATE,
+        )
+    }
+}
