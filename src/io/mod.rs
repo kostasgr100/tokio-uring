@@ -8,6 +8,9 @@ mod fallocate;
 
 mod fsync;
 
+mod futex;
+pub(crate) use futex::FutexWait;
+
 mod mkdir_at;
 
 mod noop;
